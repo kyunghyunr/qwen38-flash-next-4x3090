@@ -1,0 +1,16 @@
+# Model weights and derived tables are never committed here.
+*.safetensors
+*.gguf
+*.bin
+*.pt
+*.pth
+manifest.json
+plefp8/
+ples_int4/
+
+# Local/runtime junk
+__pycache__/
+*.pyc
+*.log
+.env
+*_token*
