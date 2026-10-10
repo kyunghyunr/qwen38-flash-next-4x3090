@@ -53,18 +53,36 @@ Both are written up in `notes/`.
 Same box, same checkpoint family, same task set, in the order I ran it. This is the honest version of
 "it got faster": every row is a configuration I actually ran, not a projection.
 
-| stage | prefill 13K | decode (reason / repeat / code) | KV pool |
+| stage | prefill 13K | decode (reason / code / table) | KV pool |
 |---|---|---|---|
-| DominikBucko recipe, 2 cards, INT4 PLE sidecar | — | 36-45 | — |
-| same recipe stretched to 4 cards (TP4, MTP k=4) | 8.53 s (1,523) | 139 / 106 / 107 | 281,030 |
+| 2 cards, FP8 PLE resident in RAM, tuned | **13.0 s (1,000)** | 70 / 70 / 87 | 267,811 |
+| 2 cards, base config (no MTP, no hot cache) | — | ~26 | — |
+| 2 cards + INT4 PLE sidecar (table off RAM) | — | 36-45 | — |
+| first 4-card attempt (TP4, before P2P existed) | 18.3-18.8 s (709) | 84 / 75 / 77 | 284,677 |
+| 4 cards, TP4 + MTP k=4, later | 8.53 s (1,523) | 139 / 106 / 107 | 281,030 |
 | halt95 v2 in a VM, no P2P | 4.87 s (2,668) | 118 / 113 / 66 | 806,792 |
 | halt95 v2 in the LXC, still no P2P | 4.50 s (2,887) | 176 / 195 / 171 | 806,792 |
 | + P2P, BAR1 fixed | **2.01 s (6,456)** | **192 / 186 / 163** | 806,792 |
 
-Two things fall out of this. Moving from a VM to a privileged LXC was worth a lot on its own (decode
-118 to 176) even with P2P still broken, and fixing BAR1 roughly doubled prefill again. The KV pool
-going from 281K to 806K tokens when I changed stacks changed what I could do with the model more than
-the speed did.
+Read the first four rows carefully, because they contradict the obvious story. The 2-card setup was
+not slow: it decoded at 70-87 tok/s with the FP8 table resident in RAM, and table-generation tasks
+peaked near 197 tok/s because MTP acceptance is content-dependent. Those numbers cost 51GB of RAM and
+a boot-time trip through swap.
+
+The sidecar row is lower on purpose. Serving the table from disk gave up roughly half the decode
+speed in exchange for freeing that 51GB, which is what let a 96GB box run the model at all. If you
+have the RAM, keep the table in it and skip the sidecar.
+
+The fourth row is the part I would want someone else to read. Adding the fourth card made things
+*worse*: prefill went from 1,000 to 709 tok/s and GPU utilization during prefill collapsed to 12-15%,
+because four ranks without P2P serialize every layer's all-reduce and all-to-all through host memory.
+I reverted to TP2 and left the new card idle. GPU count is not a scale-up lever when the interconnect
+is the host; the card only became useful after the LXC and BAR1 work in `notes/p2p-and-bar1.md`.
+
+After that, two things compounded. Moving from a VM to a privileged LXC was worth a lot on its own
+(decode 118 to 176) even with P2P still broken, and fixing BAR1 roughly doubled prefill again. The KV
+pool going from 281K to 806K tokens when I changed stacks changed what I could do with the model more
+than the speed did.
 
 ## Power: 250W, measured
 

@@ -11,8 +11,11 @@ serves a 25.6GB INT4 copy of that table from disk instead:
 - the checkpoint's PLE tensors are dropped into a meta-device stub instead of being loaded into 51GB
   of scratch and then discarded
 
-It reached 36-45 tok/s. The current production setup is a different stack on four cards at 163-192
-tok/s, described in the top-level README, and it does not use anything in this directory.
+It reached 36-45 tok/s. That is not the fastest this box ever went on two cards: with the FP8 table
+resident in RAM, the same setup decoded at 70-87 tok/s. The sidecar trades roughly half the decode
+speed for 51GB of RAM, which is the entire point when RAM is what you are short of. The current
+production setup is a different stack on four cards at 163-192 tok/s, described in the top-level
+README, and it does not use anything in this directory.
 
 I am keeping it because the technique is the difference between "this model needs 128GB of system
 RAM" and "this model needs a disk", and because it is the reason a single 128GB machine can consider
